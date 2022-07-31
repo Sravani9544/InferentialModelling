@@ -1,0 +1,144 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Name: Sravani Mahankali
+ASSIGNMENT NO: Application assignment - week 6
+
+-------------------------------------------------------------------------------
+## installing the necessary packages
+
+
+```{r}
+remotes::install_version("Zelig", "5.1.6") 
+```
+
+
+```{r}
+library(MatchIt)
+library(tidyverse)
+library(Zelig)
+library(faraway)
+```
+
+-------------------------------------------------------------------------------
+1) Choose one of the datasets that we have used in our course so far. Ensure       that it has at least one factor variable that can serve as a treatment          variable.
+
+```{r}
+## loading the dvisits data from faraway library
+
+data("dvisits")
+```
+
+
+```{r}
+## converting the necessary variables into factors
+
+
+dvisits$sex <- as.factor(dvisits$sex)
+dvisits$levyplus <- as.factor(dvisits$levyplus)
+dvisits$freepoor <- as.factor(dvisits$freepoor)
+dvisits$freerepa <- as.factor(dvisits$freerepa)
+dvisits$chcond1 <- as.factor(dvisits$chcond1)
+dvisits$chcond2 <- as.factor(dvisits$chcond2)
+```
+
+```{r}
+## checking the summary
+
+summary(dvisits)
+```
+
+-------------------------------------------------------------------------------
+2) Formulate a research question with regards to how the outcome is expected to    be causally determined by different conditions of the treatment variable       (the documents shared this week, along with the explanation provided in this    week’s lecture video will be helpful here).
+
+RESEARCH QUESTION: This study is conducted to assess whether the private health insurance fund for private patient in public hospital (with doctor of choice), increases the the number of consultations with a doctor or not, and to assess whether or not matching improves the linear model with all the other variables.The data set taken here is dvisits(faraway package), and the matching is done using the propensity score matching technique.
+
+-------------------------------------------------------------------------------
+3) Perform matching to create a form of the dataset that lends itself to          drawing causal conclusions when it is analyzed using an appropriate modeling    technique. Try at least two matching approaches described in the documents     and evaluate which of the two approaches produced a better balanced version    of the dataset. Use this version in later analyses.
+
+--> performing the matching with nearest neighbor method and optimal method
+
+
+```{r}
+## performing matching with nearest neighbors method
+
+matching1 <- matchit(levyplus~  sex + age + income + freepoor + illness + actdays + hscore+ nondocco + hospadmi + hospdays + medicine + prescrib+ freerepa+  chcond2 + chcond1, data = dvisits, 
+                   method="nearest")
+```
+
+```{r}
+## checking the summary 
+
+summary(matching1)
+```
+
+```{r}
+## performing matching with optimal method
+
+matching2 <- matchit(levyplus~  sex + age + income + freepoor + illness + actdays + hscore+ nondocco + hospadmi + hospdays + medicine + prescrib+ freerepa+  chcond2 + chcond1, data = dvisits,
+                   method="optimal")
+```
+
+```{r}
+## checking the summary
+
+summary(matching2)
+```
+
+INTERPRETATION: There is no difference in both the methods, that is nearest neighbors and optimal. But, we perform the further analysis with the optimal method, as it minimizes the distance within each pair.
+
+-------------------------------------------------------------------------------
+4) Using the modified version of the dataset as a basis for your analysis,        create two models, using a modeling approach that is appropriate for the       particular type of outcome in your dataset. The first model should include     predictors that you found to be important in your previous analyses of the     dataset, excluding the treatment variable. The second model should include     all of the predictors from the first model + the treatment variable.
+
+--> two models are created using the data from optimal method, and modelling using the least squares method.
+
+```{r}
+## least squares model using only significant variables from question 2, and excluding the treatment variable (levyplus).
+
+Model1 <- zelig(doctorco~  sex + age + income + freepoor + illness + actdays + hscore+ nondocco + hospadmi + hospdays + medicine + prescrib+ freerepa+  chcond2 + chcond1, 
+                 data = match.data(matching2),
+                 model = "poisson")
+```
+
+
+```{r}
+## checking the summary
+
+summary(Model1)
+```
+
+
+```{r}
+## performing least squares model with all the variables including treatment variable(levyplus). 
+
+Model2 <- zelig(doctorco~ levyplus + sex + age + income + freepoor + illness + actdays + hscore+ nondocco + hospadmi + hospdays + medicine + prescrib+ freerepa+  chcond2 + chcond1,
+                 data = match.data(matching2),
+                 model = "poisson")
+```
+
+```{r}
+## checking the summary
+
+summary(Model2)
+```
+
+
+```{r}
+## calculating the 95% confidence intervals
+
+x.out.0 <- setx(Model2, levyplus=0)
+x.out.1 <- setx(Model2, levyplus=1)
+s.out <- sim(Model2, x = x.out.0, x1 = x.out.1)
+summary(s.out)
+```
+
+-------------------------------------------------------------------------------
+5) Compare the two models and draw appropriate conclusions with regards to the    unique effect of the treatment variable on the outcome.
+
+INTERPRETATION: 
+* The AIC of the model 1 is 4525.4 and of model 2 is 4527.1. And none of the variables in both the model were found to be significant. Hence, Though model excluding the treatment variable was better than the one including it, it was a minor improvement, and not a good fit model. 
+* As the confidence intervals of treated and control group overlap with each other. So,the private health insurance fund for private patient in public hospital (with doctor of choice), does not increase the the number of consultations with a doctor.
+  
+
