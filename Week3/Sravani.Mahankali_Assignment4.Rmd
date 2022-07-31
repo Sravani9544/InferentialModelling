@@ -1,0 +1,321 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## installing the necessary packages
+
+```{r}
+packages <- c('faraway','dplyr','ggplot2')
+
+```
+
+```{r}
+purrr::walk(packages,library,character.only=T)
+
+```
+
+## checking the data set and its summary
+
+
+```{r}
+## viewing the dataset
+
+View(pima)
+```
+
+```{r}
+?pima
+```
+
+
+
+```{r}
+## checking the summary
+
+summary(pima)
+```
+
+
+```{r}
+## checking the class of test
+
+class(pima$test)
+```
+
+```{r}
+## changing the test variable to factor
+
+pima$test <- as.factor(pima$test)
+```
+
+```{r}
+## rechecking the summary
+
+summary(pima)
+```
+
+---------------------------------------------------------------------------------------
+a) Build a full model to predict test.
+
+
+```{r}
+## building the model with all the variables and test as the outcome variable
+
+pima.Full <- glm(test ~ pregnant+ glucose+ diastolic+ triceps+ insulin+ bmi+ diabetes+ age, family = binomial, pima)
+
+## checking the summary of the model
+
+summary(pima.Full)
+```
+
+REPORT: The variables pregnant, glucose, diastolic, bmi, and diabetes are statistically significant in this model as the probability of z-statistic is less than 0.05, i.e., the p(z) respectively are 0.000123, < 2e-16, 0.011072, 2.76e-09, and 0.001580. AIC (Akaike Information Criterion) of this model is 741.45.  
+
+---------------------------------------------------------------------------------------
+b) Using this model, explain the amount by which the log-odds of test == 1 increases      when number of times pregnant increases from 3 to 5.
+
+
+```{r}
+## checking the coefficients of the model
+
+coef(pima.Full)
+```
+
+
+```{r}
+## defining the y variable
+
+pima$y <- ifelse(pima$test == "Yes",1,0)
+beta <- coef(pima.Full)
+
+## finding the log-odds of test == 1
+### to get the effect of number of times pregnant on the odds of test, we calculate exponent value of coefficient of the variable with 2(5-3). 
+
+exp(beta[2] * 2)
+```
+
+REPORT: Increasing the number of times pregnant from 3 to 5 results in an increase of ≈ 28% in the odds of having test == 1
+
+
+---------------------------------------------------------------------------------------
+c) Next, build a model that excludes triceps, insulin, and bmi. Determine whether this    model has a fit that is statistically significantly different from the full model by    referencing appropriate evidence.
+
+
+```{r}
+## building the model excluding triceps, insulin, bmi
+
+pima.Small <- glm(test ~ pregnant+ glucose+ diastolic+ diabetes+ age, family = binomial, pima)
+
+## checking the summary of the model
+
+summary(pima.Small)
+```
+
+
+```{r}
+## comparing both the models
+
+anova(pima.Small, pima.Full, test="Chi")
+```
+
+REPORT: The variables pregnant, glucose, and diabetes are statistically significant in this model as the probability of z-statistic is less than 0.05, i.e., the p(z) respectively are 0.000112, < 2e-16, and 0.000304. AIC (Akaike Information Criterion) of this model is 781.241. This value of AIC is larger than the AIC of the full model, and there is more information missing in the model. And from anova test results, it is seen that there is a significant change in the deviance from smaller to larger model including triceps, insulin, bmi as the probability of chi-square test is less than 0.05 [p(chi) = 6.269e-10]. Therefor larger model is better than the smaller one.    
+
+
+---------------------------------------------------------------------------------------
+d) Comparing the results of the two models, comment on whether the nature of              relationships between each of the predictors, which are common in both models, and     the outcome, changes by providing appropriate evidence to support your answer.
+
+REPORT: Upon comparing all the common predictors pregnant, glucose, diastolic, diabetes and age in both the models, it is seen that the diastolic predictor is significant in full model and is not significant in the small model. The coefficient of the diastolic predictor of the full model is larger than the small model, making it significant in the full model. The significance of the diabetes predictor has decreased going from small model to full model with as the probability of this has increased with 0.001276. In all the other common predictors there is not much of a change in the significance level. 
+
+
+---------------------------------------------------------------------------------------
+e) Looking at the prediction accuracy values, which model, the full or the reduced, has    a better predictive accuracy? Support your answer with appropriate evidence.
+
+
+```{r}
+## removing the na values
+
+pima.accuracy.Full <- na.omit(pima)
+
+## adding predictive values
+
+pima.accuracy.Full <- mutate(pima.accuracy.Full,predprob=predict(pima.Full,type="response"))
+
+## checking prediction accuracy for full model
+
+pima.accuracy.Full <- mutate(pima.accuracy.Full, predout=ifelse(predprob < 0.5, "no", "yes"))
+tab.results <- xtabs( ~ test + predout, pima.accuracy.Full)
+
+class.rate <- (tab.results[1,1]+tab.results[2,2])/sum(tab.results)
+print(paste("The classification accuracy full model is: ",
+            round(class.rate * 100, 4), "%", sep=""))
+```
+
+```{r}
+## removing the na values 
+
+pima.accuracy.Small <- na.omit(pima)
+
+## adding predictive values
+
+pima.accuracy.Small <- mutate(pima.accuracy.Small, predprob=predict(pima.Small,type="response"))
+
+## checking prediction accuracy for small model
+
+pima.accuracy.Small <- mutate(pima.accuracy.Small, predout=ifelse(predprob < 0.5, "no", "yes"))
+tab.results <- xtabs( ~ test + predout, pima.accuracy.Small)
+
+class.rate <- (tab.results[1,1]+tab.results[2,2])/sum(tab.results)
+print(paste("The classification accuracy of small model is: ",
+            round(class.rate * 100, 4), "%", sep=""))
+```
+
+REPORT: The prediction accuracy of the small model is 76.1719% and the full model is 78.2552%. Observing the values it seems that the full model is better at prediction accuracy
+
+---------------------------------------------------------------------------------------
+f) For the better model, perform the needed key diagnostics and Interpret the results     of the model based on what you find here.
+
+
+```{r}
+## adding residuals and linear-predicted values to the original dataframe
+
+pima <- mutate(pima, residuals=residuals(pima.Full), linpred=predict(pima.Full))
+
+## creating  bins based on quantiles, so that we can plot the means, within each bin, of linear residuals vs linear predictors
+
+bins <- group_by(pima, cut(linpred, breaks=unique(quantile(linpred, (1:100)/101))))
+
+diabins <- summarise(bins, residuals=mean(residuals), linpred=mean(linpred))
+
+plot(residuals ~ linpred, diabins, xlab="linear predictor")
+
+```
+
+
+```{r}
+## grouping by pregnant to plot residuals
+
+group_by(pima, pregnant) %>%
+  summarise(residuals = mean(residuals)) %>%
+  ggplot(aes(x=pregnant,y=residuals)) + geom_point()
+```
+
+```{r}
+## filtering abnormal values
+
+filter(pima, pregnant > 13) %>% select(pregnant, test, residuals)
+```
+
+REPORT: There are four outlier data values, when grouped the data by number of time pregnant. All the people had signs showing diabetes.
+
+```{r}
+## grouping by glucose to plot residuals
+
+group_by(pima, glucose) %>%
+  summarise(residuals = mean(residuals)) %>%
+  ggplot(aes(x=glucose,y=residuals)) + geom_point()
+```
+
+REPORT: There are no visible outliers on plotting the residual plot grouping by glucose.
+
+
+```{r}
+## grouping by diastolic to plot residuals
+
+group_by(pima, diastolic) %>%
+  summarise(residuals = mean(residuals)) %>%
+  ggplot(aes(x=diastolic,y=residuals)) + geom_point()
+```
+
+REPORT: There are no visible outliers on plotting the residual plot grouping by diastolic.
+
+
+```{r}
+## grouping by triceps to plot residuals
+
+group_by(pima, triceps) %>%
+  summarise(residuals = mean(residuals)) %>%
+  ggplot(aes(x=triceps,y=residuals)) + geom_point()
+```
+
+```{r}
+## filtering abnormal values
+
+filter(pima, triceps > 65) %>% select(triceps, test, residuals)
+```
+
+REPORT: There is one outlier data values, when grouped the data by triceps skin fold thickness. The person had signs showing diabetes.
+
+```{r}
+## grouping by insulin to plot residuals
+
+group_by(pima, insulin) %>%
+  summarise(residuals = mean(residuals)) %>%
+  ggplot(aes(x=insulin,y=residuals)) + geom_point()
+```
+
+```{r}
+## filtering the abnormal values
+
+filter(pima, insulin > 600) %>% select(insulin, test, residuals)
+```
+
+REPORT: There are three outlier data values, when grouped the data by 2-hour serum insulin. Only one person had signs of diabetes with a large value of 856 mu U/ml.
+
+```{r}
+## grouping by bmi to plot residuals
+
+group_by(pima, bmi) %>%
+  summarise(residuals = mean(residuals)) %>%
+  ggplot(aes(x=bmi,y=residuals)) + geom_point()
+```
+
+REPORT: There are no visible outliers on plotting the residual plot grouping by bmi.
+
+
+```{r}
+## grouping by diabetes to plot residuals
+
+group_by(pima, diabetes) %>%
+  summarise(residuals = mean(residuals)) %>%
+  ggplot(aes(x=diabetes,y=residuals)) + geom_point()
+```
+
+REPORT: There are no visible outliers on plotting the residual plot grouping by diabetes.
+
+```{r}
+## grouping by age to plot residuals
+
+group_by(pima, age) %>%
+  summarise(residuals = mean(residuals)) %>%
+  ggplot(aes(x=age,y=residuals)) + geom_point()
+```
+
+```{r}
+## filtering the abnormal values
+
+filter(pima, age >= 70) %>% select(age, test, residuals)
+```
+
+REPORT: There are three outlier data values, when grouped the data by age. Only one person had signs of diabetes of an age 70 years.
+
+
+```{r}
+## plotting qq plot to check the normality
+
+qqnorm(residuals(pima.Full))
+```
+
+```{r}
+## plotting the halfnormal plot
+
+halfnorm(hatvalues(pima.Full))
+```
+
+
+```{r}
+## filtering the abnormal values from qq plot
+
+filter(pima, hatvalues(pima.Full) > 0.07) %>% select(pregnant, glucose, diastolic, triceps, insulin, bmi, diabetes, age, test, residuals)
+```
+
+REPORT: There are two observations whose absolute residual values are very large out of 768 adult female Pima Indians living near Phoenix. So, the influence of the outliers maybe minute.
