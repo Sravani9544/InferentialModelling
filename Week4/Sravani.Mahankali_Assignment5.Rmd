@@ -1,0 +1,334 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+NAME: Mahankali Sravani
+ASSIGNMENT : Assignment 5(week 5)
+
+-----------------------------------------------------------------------------------------------------------------
+## loading the necessary packages
+
+```{r}
+packages <- c('faraway','dplyr','ggplot2','GGally', 'pscl')
+```
+ 
+```{r}
+purrr::walk(packages,library,character.only=T)
+```
+
+---------------------------------------------------------------------------------------------
+
+## viewing and summarizing the dataset
+
+```{r}
+View(dvisits)
+```
+
+```{r}
+?dvisits
+```
+
+
+
+```{r}
+summary(dvisits)
+```
+
+---------------------------------------------------------------------------------------------
+1) Identify and perform the necessary pre-processing steps on the dataset. Create appropriate plots to indicate the relationship between doctorco (the outcome of interest) and the potential predictors, age and illness. (4 points)
+
+
+## preprocessing the variables by converting them to factors
+
+The variables sex, levyplus, freepoor, freerepa, chond1, and chond2 are converted into factors as they have categorical responses.
+
+```{r}
+dvisits$sex <- as.factor(dvisits$sex)
+dvisits$levyplus <- as.factor(dvisits$levyplus)
+dvisits$freepoor <- as.factor(dvisits$freepoor)
+dvisits$freerepa <- as.factor(dvisits$freerepa)
+dvisits$chcond1 <- as.factor(dvisits$chcond1)
+dvisits$chcond2 <- as.factor(dvisits$chcond2)
+```
+
+```{r}
+dvisits <- dvisits[, -3]
+```
+
+
+```{r}
+## rechecking the summary
+
+summary(dvisits)
+```
+
+```{r}
+## plotting the relationship between number of consultations and age
+
+dvisits %>%
+    ggplot(aes(x = age, y = doctorco)) +
+    geom_point(color = "pink", alpha = .9) +
+    geom_smooth(aes(linetype = "Linear fit line"), method = "loess",se = FALSE, color = "black") +
+    theme_minimal() +
+    labs(x = "age", y = "number of consultations with a doctor in past 2 weeks") +
+    scale_size_manual(values = 2, name = "")+
+    scale_linetype_manual(values = 1, name = "")
+```
+
+INTERPRETATION: There is no perfect correlation between the number of consultations with a doctor and the age, as the linear fit line is close to the axis. 
+
+
+```{r}
+## plotting the relationship between number of consultations and illness
+
+dvisits %>%
+    ggplot(aes(x = illness, y = doctorco)) +
+    geom_point(color = "purple", alpha = .9) +
+    geom_smooth(aes(linetype = "Linear fit line"), method = "lm",se = FALSE, color                     = "gray60") +
+    theme_minimal() +
+    labs(x = "illness", y ="number of consultations with a doctor in past 2 weeks") +
+  scale_size_manual(values = 2, name = "")+
+  scale_linetype_manual(values = 1, name = "")
+```
+
+INTERPRETATION: There is a slight correlation between the number of consultations with a doctor and the illness, as the number of consultations tend to increase with the total number of illness. 
+
+```{r}
+## plotting pair plots to check data redundancy
+ggpairs(dvisits, upper = list(continuous = wrap("cor", size = 1.5)))+
+  theme_minimal(base_size = 6)
+  
+```
+
+INTERPRATATION: Out of all the variables, the variables medicine and prescrib have greater correlation. 
+
+
+```{r}
+## saving the plot in a image format
+
+ggsave(filename = "Sravani.Mahankali_Assignment5_ggpairs.png", dpi = 600, device = "png", width = 20, height  = 20)
+```
+
+
+---------------------------------------------------------------------------------------------
+2) Combine the the two predictors chchond1 and chcond2 into a single predictor with four levels corresponding to the combinations of both: 00, 01, 10, and 11. Then, create an appropriate plot to represent visually the relationship between this (combined) predictor and the outcome doctorco. Explain what is observed in the graph. (1 point)
+
+
+```{r}
+## refactoring the chronic condition variable into four levels
+
+dvisits$chronic_cond <- as.factor(ifelse((dvisits$chcond1 == 0 &
+                                         dvisits$chcond2 == 0),
+                                        0,
+                                 ifelse((dvisits$chcond1 == 0 &
+                                         dvisits$chcond2 == 1),
+                                        1,
+                                 ifelse((dvisits$chcond1 == 1 &
+                                         dvisits$chcond2 == 0),
+                                        2, 3))))
+```
+
+```{r}
+## summarizing the variable
+
+summary(dvisits$chronic_cond)
+```
+
+INTERPRETATION: The category 0 represents no chronic condition irrespective of limitation in activity, and there are 2493 observations in this category. The category 1 represents no chronic condition when activity is not limited and there is chronic condition when activity is limited. The category 2 represents  chronic condition when activity is not limited and no chronic condition when activity is limited. The category 3  represents chronic condition irrespective of activity. 
+
+
+```{r}
+## plotting boxplots
+
+dvisits%>%
+ggplot(aes(x = chronic_cond, y = doctorco)) + 
+  geom_boxplot(color = "blue") +
+  theme_minimal()+
+  labs(x = "chronic condition", y = "number of consultations with a doctor in past 2 weeks") 
+```
+
+INTERPRETATION:The third quartile of category 1 lies between 0 visits and 1. There few persons who consulted a doctor without any chronic condition. And There are few patients who consulted doctor when having a chronic condition when activity is not limited and no chronic condition when activity is limited.
+
+---------------------------------------------------------------------------------------------
+3) Build a "full" Poisson model that includes all of the predictors (excluding chcond1 and chcond2). Consider the deviance statistic of this model and comment on the goodness of fit of this model. (3 points)
+
+
+```{r}
+## selecting the variables
+
+dvisits.cleaned <- dvisits%>%
+  select(sex, age, income, levyplus, freepoor, freerepa, illness, actdays, hscore, doctorco, nondocco, hospadmi, hospdays, medicine, chronic_cond)
+```
+
+## The nonpresc variable is removed as it was producing the NA's in coefficient section in the model, and prescrib is removed as it has higher correlation with medicine.
+
+```{r}
+## building the poisson model
+
+mod.poisson <- glm(doctorco ~ ., family=poisson,
+                   data=dvisits.cleaned)
+summary(mod.poisson)
+```
+
+```{r}
+pchisq(mod.poisson$deviance, df=mod.poisson$df.residual, lower.tail=FALSE)
+
+```
+
+```{r}
+## calculating deviance percentage
+
+print(paste("Deviance accounted for:",
+            round((1-(mod.poisson$deviance/mod.poisson$null.deviance))*100, 3),
+            "%", sep=""))
+```
+
+INTERPRETATION: 
+
+1) The significant variables in the model include sex(female)[p(z) = 0.0528], freepoor(1 i.e., covered by the government) [p(z) = 0.0207], illness [p(z) = 3.70e-12], actdays [p(z) = < 2e-16], hsocre[p(z)=0.0644], hospadmi [p(z) = 1.55e-08], medicine [p(z) = 6.50e-11], as the probability of z-statistic is less than 0.05. The variable sex(female) is significantly different from male, and freepoor(1)  is significantly different from other category not covered by the government because of low income, recent immigrant, unemployed   
+
+2) The AIC of the model is very large, so the model is not a good model.
+
+3) The  deviance goodness of fit test of the model can be calculated by the probability to the right of the deviance value for the chi-squared distribution. And since the probability is greater than 0.05(p = 1) and the deviance percentage is 23.973%, we reject null hypothesis i.e., model is correctly specified.
+
+---------------------------------------------------------------------------------------------
+
+4) Next, build a ZIP model with the same set of predictors. Compare the results with those from the "regular" Poisson model. Comment on which predictors are now significant/not significant. (4 points)
+
+
+```{r}
+## selecting the necessary variables
+
+cleaned.dvisits <- dvisits%>%
+  select(sex, age, income, levyplus, freepoor, freerepa, illness, actdays, hscore, doctorco, nondocco, hospadmi, hospdays, medicine, chronic_cond)
+```
+
+
+## The age sq, prescrib, and nonpres are removed due to data redundancy, which is observed in ggpair plots in the preprocessing stage
+
+
+```{r}
+## building ghe zero inflation poisson model
+
+mod.zip <- zeroinfl(doctorco ~ ., data=cleaned.dvisits)
+summary(mod.zip)
+```
+
+INTERPRETATION:
+
+This model does not contains sex, freepoor, prescrib as the significant predictors,as in the regular poisson model
+This model contains freerepa, chronic_cond1, actdays, levyplus1 as signinficant predictors, which are not significant in the regualar poisson model. 
+
+* for the count model (the count is greater than zero) 
+
+1) The significant variables in the model include actdays [p(z) =  < 2e-16], hospadmi [p(z) = 4.16e-11], medicine [p(z) = 0.002106], chronic_cond1 [p(z) = 0.030104], as the probability of z-statistic is less than 0.05. The variable chronic_cond1 is significantly different from base line category 0.   
+2) The negative value of the chronic_cond1 [-0.221337] indicates that the mean value of this is statistically different and smaller than the baseline category.
+
+* for the zero inflation model
+
+1) The significant variables in the model include levyplus1 [p(z) = 0.008745], freerepa1 [p(z) = 0.000274], illness [p(z) = 3.26e-05], actdays [p(z) =  1.47e-06], medicine [p(z) = 1.28e-07], as the probability of z-statistic is less than 0.05. The variable levyplus1 and freerepa1 is significantly different from base line category 0.  
+
+2) The negative value of the levyplus1 [-0.52796] and freerepa1 [-1.16002] indicates that the mean value of this is statistically different and smaller than the baseline category. And the coefficients of other variables are negative.
+
+
+---------------------------------------------------------------------------------------------
+5) Use a stepwise regression approach to determine whether the full ZIP model can be improved upon. Comment on the results. (3 points)
+
+
+```{r}
+## creating the step wise model of zero inflation poisson model
+
+better.mod <- step(mod.zip)
+summary(better.mod)
+```
+
+INTERPRETATION: 
+
+1) The original model can be slightly improved upon by taking only income, levyplus, freepoor, freerepa, illness, actdays, hscore, hospadmi, and medicine than taking all the variables into consideration. The AIC of the model taking only income, levyplus, freepoor, freerepa, illness, actdays, hscore, hospadmi, and medicine.
+
+2) In the final model:
+
+* for the count model (the count is greater than zero) 
+
+A) The significant variables in the model include actdays [p(z) =  < 2e-16], hospadmi [p(z) = 4.97e-11], medicine [p(z) = 0.00560], freerepa1 [p(z) = 0.00206], as the probability of z-statistic is less than 0.05. The variable freerepa1 is significantly different from base line category 0.   
+B) The negative value of the coefficient of freerepa1[-0.302812] indicates that the mean value of this is statistically different and smaller than the baseline category.
+
+* for the zero inflation model
+
+A) The significant variables in the model include levyplus1 [p(z) =0.000271], freerepa1 [p(z) = 1.40e-08], illness [p(z) = 7.62e-06 ], actdays [p(z) = 7.18e-07], medicine [p(z) = 1.70e-09], as the probability of z-statistic is less than 0.05. The variable levyplus1 and freerepa1 is significantly different from base line category 0.  
+
+B) The negative value of the levyplus1 [-0.68615] and freerepa1 [-1.56410] indicates that the mean value of this is statistically different and smaller than the baseline category. And the coefficients of other variables are negative.
+
+
+-------------------------------------------------------------------------------------------------------------
+6) Next, create two new observations, one for a young male and another for an older female, where young is defined as an age in the first quartile of age and old is defined as an age in the fourth quartile of age. Choose the values of other predictors arbitrarily. Determine, for each of these observations, the probabilities of the expected number of visits, for different count values. Comment on the results. (3 points)
+
+
+```{r}
+## checking the summary of age
+
+summary(dvisits$age)
+```
+
+
+```{r}
+## selecting the necessary variables
+
+dvisits.test <- dvisits%>%
+  select(doctorco,income,levyplus,freepoor,freerepa,illness,actdays,hscore,hospadmi,medicine)
+```
+
+
+## The variables mentioned above are taken as the original model can be slightly improved upon by taking only income, levyplus, freepoor, freerepa, illness, actdays, hscore, hospadmi, medicine than taking all the variables into consideration,.
+
+
+```{r}
+## creating the new poisson model with new created observation and other predictors
+
+ZIP.test <- zeroinfl(doctorco ~ .,  data=dvisits.test)
+summary(ZIP.test)
+```
+
+```{r}
+young.male <- data.frame(age = 0.2200, sex= factor(0, levels = c(0,1)) ,income = 0.55, levyplus = factor(1, levels = c(0, 1)), freepoor = factor(0, levels = c(0,1)), freerepa = factor(0, levels = c(0,1)), illness = 1, actdays = 0.86, hscore = 0.22,hospadmi = 0.17, medicine = 1.2)
+```
+
+```{r}
+max(predict(ZIP.test, newdata=young.male, type="prob")) 
+```
+
+```{r}
+predict(ZIP.test, newdata=young.male, type="zero")
+```
+
+INTERPRETATION: 
+* We find that that the highest count probability is zero consultations with the doctor   (0.7537266 or 75.37%) for a young male group. 
+* The probability of producing zero consultations with the doctor is 0.4016846or 40.16%   from the zero-count part of our model for a young male group.
+* We interpret this difference as being indicative of the need  of the patient(young      males) to have consultations with the doctor but has not consulted.
+
+```{r}
+older.female <- data.frame( age = 0.7200,sex=factor(1, levels = c(0,1)) ,income = 0.55, levyplus = factor(1, levels = c(0, 1)), freepoor = factor(0, levels = c(0,1)), freerepa = factor(0, levels = c(0,1)), illness = 1, actdays = 0.86, hscore = 0.22,hospadmi = 0.17, medicine = 1.2 )
+```
+
+
+```{r}
+max(predict(ZIP.test, newdata=older.female, type="prob")) 
+```
+
+```{r}
+predict(ZIP.test, newdata=older.female, type="zero")
+```
+
+INTERPRETATION: 
+* We find that that the highest count probability is zero consultations with the doctor   (0.7537266 or 75.37%) for a older female group. 
+* The probability of producing zero consultations with the doctor is 0.4016846or 40.16%   from the zero-count part of our model for a older female group.
+* We interpret this difference as being indicative of the need  of the patient(older      females) to have consultations with the doctor but has not consulted.
+
+------------------------------------------------------------------------------------------------------------------------
+
