@@ -1,0 +1,339 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+NAME: Sravani Mahankali
+FILE: Examination
+
+---------------------------------------------------------------------------------------------
+
+```{r}
+## installing the necessary packages
+
+install.packages("ggplot2")
+install.packages("faraway")
+install.packages("generalhoslem")
+install.packages("tidyverse")
+install.packages("brant")
+install.packages("MASS")
+```
+
+```{r}
+## loading the packages
+
+packages <- c('survival','dplyr','ggplot2','GGally','faraway', 'generalhoslem', 'tidyverse','brant','MASS')
+purrr::walk(packages,library,character.only=T)
+```
+
+```{r}
+## loading the data and checking the summary
+
+data(pbc)
+?pbc
+summary(pbc)
+```
+
+```{r}
+## omiting id variable
+
+my.pbc <- na.omit(pbc[, -1])
+```
+
+---------------------------------------------------------------------------------------------
+1) The starter file has code for converting a couple of variables into factors, from their original type. What is the purpose behind these conversions? Base you answer in the contextual information related to the dataset. This information can be pulled up by using the help function on pbc.
+
+
+```{r}
+## converting variables to factors as they have categorical nature
+
+my.pbc$status <- as.factor(my.pbc$status) #status should be a factor
+my.pbc$ascites <- as.factor(my.pbc$ascites) #ascites should be factor
+my.pbc$stage <- as.factor(my.pbc$stage)#stage is ordinal/rank
+my.pbc$trt <- as.factor(my.pbc$trt)
+my.pbc$hepato <- as.factor(my.pbc$hepato)
+my.pbc$spiders <- as.factor(my.pbc$spiders)
+my.pbc$edema <- as.factor(my.pbc$edema)
+```
+
+```{r}
+## checking the summary
+
+summary(my.pbc)
+```
+
+```{r}
+## checking the class of all variables 
+
+sapply(my.pbc, class)
+```
+
+```{r}
+## checking the class of only stage
+
+summary(my.pbc$stage)
+```
+
+---------------------------------------------------------------------------------------------
+2) Execute the code associated with excluding trt, time, and status from the dataframe to produce a reduced version of the dataset (represented by the dataframe object labeled my.pbc in the R code file accompanying these instructions).
+
+
+```{r}
+## ignoring trt, time, and status, creating a reduced dataset
+
+my.reduced.pbc <- my.pbc[, -c(1:3)]
+summary(my.reduced.pbc)
+```
+
+
+---------------------------------------------------------------------------------------------
+
+```{r}
+## checking the pair plot to identify variables leading to data redundancy
+
+ggpairs(my.reduced.pbc, upper = list(continuous = wrap("cor", size = 1.0)))+
+  theme_minimal(base_size = 4)
+```
+
+
+```{r}
+## ordinal regression full model
+
+ordreg1 <-  MASS::polr(stage ~ ., my.reduced.pbc, Hess=TRUE)
+summary(ordreg1)
+
+```
+
+```{r}
+## choosing better ordinal regression model by removing un-necessary variables to reduce data redundancy
+
+better.model <- step(ordreg1)
+```
+
+```{r}
+## removing unnecessary variables
+
+My.Reduced.Pbc <- my.reduced.pbc[,-c(2,6,7,9,11,12,13,14, 15)]
+
+summary(My.Reduced.Pbc)
+```
+
+---------------------------------------------------------------------------------------------
+2) Then, fit a model to predict stage using the remaining variables as predictors in the reduced version of the dataset (represented by the dataframe object with the label my.reduced.pbc). Explain the purpose behind excluding the above listed three variables as predictors. 
+
+and
+
+3) Explain the rationale behind the specific modeling approach you have used, on the basis of the measurement type of the outcome variable.
+
+```{r}
+## model after removing the variables to reduce data redundancy
+
+ordreg <-  polr(stage ~ ., My.Reduced.Pbc, Hess = TRUE)
+summary(ordreg)
+```
+
+```{r}
+## calculating coeffitients summary
+
+ctable <- coef(summary(ordreg))
+
+## calculating p values
+
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+
+## combining p values and ctable
+
+ctable <- cbind(ctable, "p value" = p)
+
+ctable
+```
+
+```{r}
+## confidence intervals
+
+ci <- confint.default(ordreg)
+
+## odds ratio
+
+exp(cbind(OR = coef(ordreg), ci))
+```
+
+---------------------------------------------------------------------------------------------
+4) State the key assumptions underlying your choice of the modeling technique. Then, perform the necessary diagnostic tests to determine the extent to which these assumptions were met.
+
+```{r}
+## multi-collinearity assumption
+
+car::vif(ordreg)
+```
+
+```{r}
+## proportional odds
+
+brant::brant(ordreg)
+```
+
+```{r}
+## hosmer-lemeshow test
+
+generalhoslem::lipsitz.test(ordreg)
+```
+
+---------------------------------------------------------------------------------------------
+5)Next, go back to using my.pbc and add a new variable to represent two states of status: the
+original status values of 0 and 1 are mapped to a 0 and the original value of 2 onto a 1. In the R code, this new variable is labeled newstatus. What purpose would be served by combining the original 0 (censored) and 1 (transplant) into a single category, and the original 2 (dead) into another single category? (Hint: consider what you would need for status, if your goal is to model survival/non-survival). What is lost when combining the original 0 and 1 categories into a single new category? How will this affect the interpretation of the results.
+
+
+```{r}
+## creating a new variable, combining censored and transplant into one factor, and dead as another
+
+my.pbc$newstatus <- as.factor(ifelse((my.pbc$status == 0),0,
+                                ifelse((my.pbc$status == 1),0,
+                                      1)))
+ 
+summary(my.pbc$newstatus)
+```
+
+```{r}
+## removing the original status variable from the dataset
+
+my.pbc <- my.pbc[, -2]
+
+summary(my.pbc)
+```
+
+---------------------------------------------------------------------------------------------
+
+```{r}
+## building the ggpairs to check the data redundancy issue due to high collinearity
+
+ggpairs(my.pbc, upper = list(continuous = wrap("cor", size = 1.0)))+
+  theme_minimal(base_size = 4)
+```
+
+
+```{r}
+## building the CoxPH model with all the predictors
+
+coxph.model1 <- coxph(Surv(time, as.numeric(newstatus)) ~  trt + age + sex + ascites + hepato                          + spiders + edema + bili + chol + albumin + copper + alk.phos + ast                          + trig + platelet+ protime + stage,
+                          data=my.pbc)
+
+summary(coxph.model1)
+
+```
+
+```{r}
+## choosing better model to reduce data redundancy by removing unnecessary variables
+
+best.model <- step(coxph.model1)
+
+```
+
+---------------------------------------------------------------------------------------------
+6) Next, fit a CoxPH model on all of the predictors. Would it make sense to retain status in the set of predictors? Why/why not? Identify the variables that are indicated as being significant predictors of the outcome. What is the outcome that is being modeled?
+
+
+```{r}
+## building the better model
+
+coxph.best <- coxph(Surv(time, as.numeric(newstatus)) ~  age  + edema + bili + albumin + copper+ ast 
+                    + protime + stage,
+                    data=my.pbc)
+summary(coxph.best)
+
+```
+
+```{r}
+## plotting the model
+
+plot(survfit(coxph.best), ylim = c(0.2, 1.0), xlab="Days", ylab="Proportion not dead",
+     main="Main survival function's plot" )
+```
+
+---------------------------------------------------------------------------------------------
+7) Identify the key assumption(s) associated with the CoxPH modeling approach, and explain
+whether it/they are satisfied, using appropriate evidence. Summarize your results in a table with the following structure.
+
+
+```{r}
+## checking proportional hazards assumption
+
+cox.zph(coxph.best)
+```
+
+
+```{r}
+## plotting proportional hazards of best model
+
+par(mfrow=c(2, 3))
+plot(cox.zph(coxph.best))
+
+```
+
+```{r}
+### checking the influential observations
+
+dfbeta <- residuals(coxph.best, type="dfbeta")
+
+## plotting the influential observations
+
+par(mfrow=c(2, 3))
+for (j in 1:11) {
+  plot(dfbeta[, j], ylab=names(coef(coxph.best))[j])
+  abline(h=0, lty=2)
+}
+```
+
+```{r}
+## plotting the residuals and predictors linear plot to check linearity
+
+
+plot(predict(coxph.best), residuals(coxph.best, type = "deviance"))
+abline(h=0)
+lines(smooth.spline(predict(coxph.best), residuals(coxph.best, type = "deviance")), col = "blue")
+
+```
+
+---------------------------------------------------------------------------------------------
+8) Next, fit full-parametric models, where the survival function of status is modeled using
+exponential and Weibull distributions to model the outcome (survival function of newstatus,
+whereas the CoxPH approach models the hazard function of newstatus). Which of these is a
+better model? Explain using appropriate evidence.
+
+
+```{r}
+## fitting weibull distribution
+
+mod.weibull <- survreg(Surv(time, as.numeric(newstatus)) ~ age  + edema + bili + albumin + copper+ ast 
+                        + protime + stage, data=my.pbc)
+summary(mod.weibull)
+```
+
+```{r}
+## fitting the exponential model
+
+mod.exponential <- survreg(Surv(time, as.numeric(newstatus)) ~ age  + edema + bili + albumin + copper+ ast 
+                           + protime + stage, data=my.pbc, dist="exponential")
+summary(mod.exponential)
+```
+
+---------------------------------------------------------------------------------------------
+9) Taking into account the results from the three survival-related models, identify the significant predictors of the outcome. Among these, which variable is the most important one? Explain on the basis of appropriate evidence.
+
+
+```{r}
+## choosing the better model among parametric models
+
+AIC(mod.exponential, mod.weibull)
+```
+
+```{r}
+## choosing the better model among all the three survival models
+
+AIC(mod.exponential, mod.weibull, coxph.best)
+```
+
+---------------------------------------------------------------------------------------------
+
+
+
