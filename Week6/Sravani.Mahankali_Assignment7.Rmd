@@ -1,0 +1,231 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+NAME: Sravani Mahankali
+ASSIGNMENT: Application assignment - week 7
+
+-------------------------------------------------------------------------------------
+
+
+```{r}
+## loading the necessary packages
+
+library(asaur)
+library(survival)
+```
+
+
+```{r}
+## loading the data
+
+data(pharmacoSmoking)
+```
+
+
+```{r}
+## checking the summary of the data
+
+summary(pharmacoSmoking)
+```
+
+
+```{r}
+## loading the unfold folder
+
+source("unfold.R")
+```
+
+
+```{r}
+## removing the un-necessary variable to reduce data-redundancy
+
+pharmacoSmoking.reduced <- pharmacoSmoking[, -(c(1, 11, 12))]
+```
+
+
+```{r}
+## checking the contrasts to observe the groups within the variables
+
+attach(pharmacoSmoking) 
+contrasts(grp)
+contrasts(gender)
+contrasts(race)
+contrasts(employment)
+contrasts(levelSmoking)
+```
+
+
+-------------------------------------------------------------------------------------
+1) Build a model with the following predictors: age, gender, race, employment,          yearsSmoking, levelSmoking, priorAttempts, longestNoSmoke, and identify which        predictors are significant.
+
+
+```{r}
+## building a model with age, gender, race, employment, yearsSmoking, levelSmoking, priorAttempts, longestNoSmoke
+
+coxph.model1 <- coxph(Surv(ttr, relapse) ~  age + gender + race + employment + yearsSmoking + levelSmoking + priorAttempts + longestNoSmoke,
+                        data=pharmacoSmoking.reduced)
+```
+
+
+```{r}
+## checking the summary
+
+summary(coxph.model1)
+```
+
+
+```{r}
+## plotting the survival function plot
+
+plot(survfit(coxph.model1), ylim = c(0.2, 1.0), xlab="Weeks", ylab="Proportion not relapsed",
+     main="Main survival function's plot" )
+```
+
+INTERPRETATION: 
+* The significant variables in the coxph model above are age, employment (other), and   employment (pt) with probability of z-statistic 0.0077, 0.0101, and 0.0534           respectively, which are less than 0.05. On observing the coefficient of age          (-5.693e-02), it is certain that the older individuals may not have a relapse        condition. On observing the coefficient of the employment(other) (7.395e-01), it     is seen that the relapse is more in the other employments than the full time         employment, which is also same in the case of part time employment with a            coefficient 6.700e-01, but there is no difference between these employment groups,   as the confidence intervals overlap each other.
+* As Likelihood ratio test, Wald test, and Score (logrank) test have the probability   of 0.05, 0.06, 0.06 respectively, it can be said that the model is only partially    better model, and there is a need to fit another model.
+* Closer to 0.3 proportion of the people had a smoking relapse after 140 weeks.
+
+-------------------------------------------------------------------------------------
+2) To the above model, add grp as a predictor and determine whether adding grp as a     predictor produces a significant improvement in model fit. Cite appropriate          evidence to support your response.
+
+
+```{r}
+## building a model with all the predictors in the previous model along with grp
+
+coxph.model2 <- coxph(Surv(ttr, relapse) ~ grp + age + gender + race + employment + yearsSmoking + levelSmoking + priorAttempts + longestNoSmoke,
+                        data=pharmacoSmoking.reduced)
+```
+
+
+```{r}
+## checking the summary
+
+summary(coxph.model2)
+```
+
+
+```{r}
+## plotting the main survival function plot
+
+plot(survfit(coxph.model2), ylim = c(0.2, 1.0), xlab="Weeks", ylab="Proportion not relapsed",
+     main="Main survival function's plot" )
+
+```
+
+```{r}
+## comparing both the models
+
+anova(coxph.model1, coxph.model2)
+```
+
+INTERPRETATION:
+* Adding grp as a predictor has increased the overall fit of the model, as the         Likelihood ratio test, Wald test, and Score (logrank) test have the probability      of 0.007, 0.01, 0.008 respectively. Also the Chi-squared probability(0.006618) of    this model is significantly different than the model excluding grp as predictor.
+* In this model apart from age, employment (other), and employment (pt), grp (patch    only) group was also significant with probability of z-statistic 0.01393, 0.00708,   0.04816, and 0.00720 respectively, which are less than 0.05. On observing the        coefficient of age (-5.044e-02), it is certain that the older individuals may not    have a relapse condition. On observing the coefficient of the employment(other)      (7.658e-01), it is seen that the relapse is more in the other employments than the   full time employment, which is also same in the case of part time employment with a   coefficient 6.739e-01, but there is no difference between these employment groups,   as the confidence intervals overlap each other. Also, the coefficient of the         grp(patch only) (5.937e-01), reveals that the relapse is more in the patch only      grp. 
+* Closer to 0.4 proportion of the people had a smoking relapse after 150 weeks, which   is also greater than the previous model.
+
+
+-------------------------------------------------------------------------------------
+3) Does the effect of grp on the hazard of relapse vary across the two genders? Cite    appropriate evidence to support your response.
+
+
+```{r}
+## building the modle with all predictors in model2 with the interaction term gender and grp
+
+coxph.model3 <- coxph(Surv(ttr, relapse) ~ grp + age + gender + race + employment + yearsSmoking + levelSmoking + priorAttempts + longestNoSmoke + gender:grp,
+                        data=pharmacoSmoking.reduced)
+```
+
+
+```{r}
+## checking the summary
+
+summary(coxph.model3)
+```
+
+```{r}
+## plotting Main survival function's plot
+
+plot(survfit(coxph.model3), ylim = c(0.2, 1.0), xlab="Weeks", ylab="Proportion not relapsed",
+     main="Main survival function's plot" )
+```
+
+INTERPRETATION: 
+* The effect of grp on the hazards of relapse significantly vary across two genders,   as the grppatchOnly:genderMale has less than 0.05 z-statistic probability(0.03324).   The coefficient of this interaction term(-1.0364535), reveals that the relapse       is less in males unde patch only grp than that of females in the same      grp.
+* As the Likelihood ratio test, Wald test, and Score (logrank) test have the           probability of 0.03, 0.03, 0.02 respectively, this is also a better model rejecting   the null hypothesis.
+* Closer to 0.5 proportion of the people had a smoking relapse after 150 weeks, which   is greater than the previous model.
+
+
+-------------------------------------------------------------------------------------
+4) Among the three models built to answer the questions above, which model is the       best? Cite appropriate evidence to support your response.
+
+
+```{r}
+## comparing all the three models
+
+anova(coxph.model1, coxph.model2, coxph.model3)
+```
+
+INTERPRETATION: The second model including the grp as precdictor and not the interaction term between the grp and gender is the best model, as the probability of chi squared statistic (0.006618) is more significant then the third model with the interaction term (0.33837).
+
+---------------------------------------------------------------------------------------------------------------------
+5) For the best model, determine whether the key assumptions associated with the Cox PH modeling approach were met for the best model. On the basis of the diagnostic information associated with the best model, explain whether the results associated with the best model are credible.
+
+a) proportional hazards assumption 
+
+```{r}
+## checking proportional hazards assumption
+
+cox.zph(coxph.model2)
+
+```
+
+OBSERVATION: Since, the probability values of all the variables are greater than 0.05, with one exception being gender close to 0.05, we can say that this assumption is met. 
+
+```{r}
+## plotting proportional hazards of best model
+
+par(mfrow=c(3, 3))
+plot(cox.zph(coxph.model2))
+```
+
+OBSERVATION: There are certain influential observations, but mostly the beta values are closer to 0.
+
+b) influential observations assumption
+
+```{r}
+## checking the influential observations
+
+dfbeta <- residuals(coxph.model2, type="dfbeta")
+
+## plotting the influential observations
+
+par(mfrow=c(2, 3))
+for (j in 1:12) {
+plot(dfbeta[, j], ylab=names(coef(coxph.model2))[j])
+abline(h=0, lty=2)
+}
+
+```
+
+REPORT: 
+* Since, there is only a small difference between df-betas of all the variables and actual betas, This assumption       maybe said to have met.
+
+c) non-linearity assumption
+
+
+```{r}
+## plotting the residuals and predictors linear plot to check linearity
+
+plot(predict(coxph.model2), residuals(coxph.model2, type = "deviance"))
+abline(h=0)
+lines(smooth.spline(predict(coxph.model2), residuals(coxph.model2, type = "deviance")), col = "blue")
+```
+
+REPORT: Though the graph seems to be linear it is not, as the observations do not fall closer to the line. So this assumption is met.
+
+INTERPRETATION: As the model is statistically good fit model, and all the assumptions seems to be satisfied, the results produce by the model is mostly credible. Although we can check for for better model and further reduce the outliers.
+
+-------------------------------------------------------------------------------------
